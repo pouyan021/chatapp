@@ -27,7 +27,7 @@ jobs:
         run: |
           echo "::warning::Qodana scan skipped because QODANA_TOKEN is unavailable. For Dependabot PRs, configure a Dependabot secret named QODANA_TOKEN."
           echo "Qodana did not scan this revision: QODANA_TOKEN is unavailable." >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: ${{ env.QODANA_TOKEN != '' }}
         with:
           ref: ${{ github.event.pull_request.head.sha }}
