@@ -2,8 +2,8 @@
 java = "25"
 spring-boot = "4.1.1"
 spring-dependency-management = "1.1.7"
-spotless = "8.0.0"
-ulid-creator = "5.2.3"
+spotless = "8.10.2"
+ulid-creator = "5.2.4"
 
 [libraries]
 ulid-creator = { module = "com.github.f4b6a3:ulid-creator", version.ref = "ulid-creator" }
