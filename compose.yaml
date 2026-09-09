@@ -1,0 +1,80 @@
+services:
+  cassandra:
+    image: cassandra:5.0
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=chatapp
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+    healthcheck:
+      # Not just "is Cassandra up" but "is our schema applied" - this is what
+      # Spring Boot's docker-compose support waits on before connecting with
+      # keyspace-name=chatapp, so it must not report healthy until
+      # cassandra-init has actually created the keyspace.
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACE chatapp'"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  cassandra-init:
+    image: cassandra:5.0
+    depends_on:
+      cassandra:
+        condition: service_started
+    volumes:
+      - ./src/main/resources/schema.cql:/schema.cql:ro
+    entrypoint: >
+      /bin/sh -c "
+      until cqlsh cassandra -e 'SELECT release_version FROM system.local'; do sleep 2; done;
+      cqlsh cassandra -f /schema.cql
+      "
+    restart: "no"
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=chatapp
+      - MINIO_ROOT_PASSWORD=chatapp123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 chatapp chatapp123 &&
+      mc mb -p local/chat-media
+      "
+    restart: "no"
+
+  # `docker compose up --wait` (what Spring Boot's docker-compose support runs)
+  # treats any exited container as a failure unless another service declares
+  # a service_completed_successfully dependency on it - this sentinel exists
+  # purely to register cassandra-init/minio-init as intentional one-shot jobs
+  # so --wait succeeds instead of failing on their (successful) exit.
+  init-complete:
+    image: alpine:3.20
+    command: ["sleep", "infinity"]
+    depends_on:
+      cassandra-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+
+volumes:
+  cassandra-data:
+  minio-data:

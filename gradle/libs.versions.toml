@@ -1,0 +1,34 @@
+[versions]
+java = "25"
+spring-boot = "4.1.1"
+spring-dependency-management = "1.1.7"
+spotless = "8.0.0"
+ulid-creator = "5.2.3"
+
+[libraries]
+ulid-creator = { module = "com.github.f4b6a3:ulid-creator", version.ref = "ulid-creator" }
+
+# Versions are managed by Spring Boot's dependency management.
+lombok = { module = "org.projectlombok:lombok" }
+micrometer-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
+spring-boot-docker-compose = { module = "org.springframework.boot:spring-boot-docker-compose" }
+spring-boot-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-cassandra = { module = "org.springframework.boot:spring-boot-starter-data-cassandra" }
+spring-boot-opentelemetry = { module = "org.springframework.boot:spring-boot-starter-opentelemetry" }
+spring-boot-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }
+spring-boot-websocket = { module = "org.springframework.boot:spring-boot-starter-websocket" }
+spring-boot-test-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator-test" }
+spring-boot-test-cassandra = { module = "org.springframework.boot:spring-boot-starter-data-cassandra-test" }
+spring-boot-test-opentelemetry = { module = "org.springframework.boot:spring-boot-starter-opentelemetry-test" }
+spring-boot-test-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux-test" }
+spring-boot-test-websocket = { module = "org.springframework.boot:spring-boot-starter-websocket-test" }
+spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
+testcontainers-cassandra = { module = "org.testcontainers:testcontainers-cassandra" }
+testcontainers-grafana = { module = "org.testcontainers:testcontainers-grafana" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+[plugins]
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }

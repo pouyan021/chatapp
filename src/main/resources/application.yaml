@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: chatapp
+  cassandra:
+    keyspace-name: chatapp
+    schema-action: none
