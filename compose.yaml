@@ -10,9 +10,9 @@ services:
     healthcheck:
       # Not just "is Cassandra up" but "is our schema applied" - this is what
       # Spring Boot's docker-compose support waits on before connecting with
-      # keyspace-name=chatapp, so it must not report healthy until
-      # cassandra-init has actually created the keyspace.
-      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACE chatapp'"]
+      # the normal or dev keyspace, so it must not report healthy until
+      # cassandra-init has created both keyspaces.
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACE chatapp; DESCRIBE KEYSPACE chatapp_dev'"]
       interval: 10s
       timeout: 10s
       retries: 30
@@ -28,7 +28,9 @@ services:
     entrypoint: >
       /bin/sh -c "
       until cqlsh cassandra -e 'SELECT release_version FROM system.local'; do sleep 2; done;
-      cqlsh cassandra -f /schema.cql
+      cqlsh cassandra -f /schema.cql &&
+      sed 's/chatapp/chatapp_dev/g' /schema.cql > /tmp/schema-dev.cql &&
+      cqlsh cassandra -f /tmp/schema-dev.cql
       "
     restart: "no"
 

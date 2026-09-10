@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat lab · Kutum Labs</title>
+  <link rel="stylesheet" href="/dev/assets/chat.css">
+  <script src="/dev/assets/vendor/stomp.umd.min.js" defer></script>
+  <script type="module" src="/dev/assets/chat.js"></script>
+</head>
+<body>
+  <header><div><span class="eyebrow">KUTUM LABS / LOCAL DEVELOPMENT</span><h1>Chat lab<span class="dot">.</span></h1>
+    <p>Two people. Real messages. See your backend at work.</p></div>
+    <nav><a href="/swagger-ui.html" target="_blank" rel="noopener">REST API ↗</a><a href="/dev/protocol" target="_blank" rel="noopener">Socket protocol ↗</a></nav>
+  </header>
+  <main>
+    <aside>
+      <section><h2>01 / Your session</h2>
+        <label for="identity">Chat as</label><select id="identity"><option value="alice">Alice</option><option value="bob">Bob</option></select>
+        <p id="identityInfo" class="small"></p><p id="device" class="small mono"></p>
+        <div class="row"><button id="connect">Connect</button><button id="disconnect" class="secondary" disabled>Disconnect</button></div>
+        <p id="status" role="status">Disconnected</p><button id="copyToken" class="secondary">Copy token for Swagger</button>
+      </section>
+      <section><div class="section-title"><h2>02 / Conversations</h2><button id="refresh" class="link">Refresh</button></div>
+        <label for="chatName">New Alice + Bob chat</label><input id="chatName" value="Alice and Bob" maxlength="200">
+        <button id="create" class="secondary wide">Create conversation</button>
+        <div id="chats" class="chat-list"></div>
+      </section>
+      <p class="hint">Open this page in another tab and choose Bob. Create a conversation here, then refresh Bob’s list and select it.</p>
+    </aside>
+    <section class="conversation">
+      <div class="conversation-head"><div><h2 id="chatTitle">Your conversation starts here</h2><p id="chatId" class="small mono">Select or create a chat.</p></div><button id="older" class="secondary" disabled>Load older</button></div>
+      <div id="messages" class="messages" role="log" aria-label="Conversation messages"><p class="empty">Connect as Alice or Bob, then choose a conversation.</p></div>
+      <form id="composer"><label for="message">Message</label><div class="row"><textarea id="message" rows="2" placeholder="Say something…" disabled></textarea><button id="send" disabled>Send</button></div></form>
+      <div class="send-footer"><span>Accepted means saved. Live events show arrival.</span><button id="retryLast" class="link" disabled>Retry last send (same ID)</button></div>
+    </section>
+  </main>
+  <p id="notice" role="alert"></p>
+  <details class="events"><summary>Request & event log <span>REST · STOMP · no credentials</span></summary><button id="clearLog" class="link">Clear log</button><pre id="log"></pre></details>
+  <script type="application/json" id="identities">{"alice":"01ARZ3NDEKTSV4RRFFQ69G5FAY","bob":"01ARZ3NDEKTSV4RRFFQ69G5FAZ"}</script>
+</body>
+</html>
