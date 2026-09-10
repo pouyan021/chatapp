@@ -7,8 +7,8 @@ import java.util.Objects;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.core.env.Environment;
+import org.springframework.http.HttpMethod;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -73,15 +73,26 @@ public class SecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
                     if (environment.matchesProfiles("dev")) {
-                        auth.requestMatchers(HttpMethod.GET, "/dev/chat", "/dev/assets/**", "/dev/jwks",
-                                        "/dev/protocol", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**")
+                        auth.requestMatchers(
+                                        HttpMethod.GET,
+                                        "/dev/chat",
+                                        "/dev/assets/**",
+                                        "/dev/jwks",
+                                        "/dev/protocol",
+                                        "/swagger-ui.html",
+                                        "/swagger-ui/**",
+                                        "/v3/api-docs",
+                                        "/v3/api-docs/**")
                                 .permitAll()
-                                .requestMatchers(HttpMethod.POST, "/dev/token").permitAll();
+                                .requestMatchers(HttpMethod.POST, "/dev/token")
+                                .permitAll();
                     }
                     auth.requestMatchers(HttpMethod.GET, "/ws/chat", "/actuator/health", "/actuator/health/**")
                             .permitAll()
-                            .requestMatchers("/api/**").authenticated()
-                            .anyRequest().denyAll();
+                            .requestMatchers("/api/**")
+                            .authenticated()
+                            .anyRequest()
+                            .denyAll();
                 })
                 .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
                 .build();

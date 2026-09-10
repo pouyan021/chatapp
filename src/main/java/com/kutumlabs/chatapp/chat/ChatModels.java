@@ -1,8 +1,8 @@
 package com.kutumlabs.chatapp.chat;
 
 import com.github.f4b6a3.ulid.Ulid;
-import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.Validator;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -20,12 +20,21 @@ public final class ChatModels {
     private ChatModels() {}
 
     public record CreateChat(
-            @Schema(example = "Alice and Bob") @NotBlank @Size(max = 200) String name,
+            @Schema(example = "Alice and Bob") @NotBlank @Size(max = 200)
+            String name,
 
             @Pattern(regexp = "DIRECT|GROUP", message = "must be DIRECT or GROUP")
-            @Schema(allowableValues = {"DIRECT", "GROUP"}, example = "DIRECT") String type,
+            @Schema(
+                    allowableValues = {"DIRECT", "GROUP"},
+                    example = "DIRECT")
+            String type,
 
-            @Schema(description = "Other participants; caller is added automatically", example = "[\"01ARZ3NDEKTSV4RRFFQ69G5FAZ\"]") @NotEmpty @Size(max = 100) List<@NotBlank String> members) {}
+            @Schema(
+                    description = "Other participants; caller is added automatically",
+                    example = "[\"01ARZ3NDEKTSV4RRFFQ69G5FAZ\"]")
+            @NotEmpty
+            @Size(max = 100)
+            List<@NotBlank String> members) {}
 
     public record ChatView(String chatId, String name, String type, Instant createdAt, List<String> members) {}
 
@@ -105,7 +114,8 @@ public final class ChatModels {
             @Pattern(
                     regexp = "[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+",
                     message = "must be a valid media content type")
-            @Schema(example = "image/png") String contentType) {}
+            @Schema(example = "image/png")
+            String contentType) {}
 
     public record UploadIntent(
             Ulid uploadId,
@@ -120,15 +130,23 @@ public final class ChatModels {
     public record MediaObject(String bucket, String key, String versionId, long sizeBytes, String contentType) {}
 
     public record MessageLocator(
-            @Schema(example = "01ARZ3NDEKTSV4RRFFQ69G5FAX") @NotBlank String messageId, @Schema(example = "2026-09-10T10:00:00Z") @NotNull Instant createdAt) {}
+            @Schema(example = "01ARZ3NDEKTSV4RRFFQ69G5FAX") @NotBlank
+            String messageId,
+
+            @Schema(example = "2026-09-10T10:00:00Z") @NotNull
+            Instant createdAt) {}
 
     public record ChatRef(String chatId, String name, String type, Instant createdAt) {}
 
     public record ChatSummaryView(String chatId, String chatName, String lastMessagePreview, Instant lastMessageAt) {}
 
-    public record MarkReadCommand(@Schema(example = "01ARZ3NDEKTSV4RRFFQ69G5FAX") @NotBlank String messageId) {}
+    public record MarkReadCommand(
+            @Schema(example = "01ARZ3NDEKTSV4RRFFQ69G5FAX") @NotBlank
+            String messageId) {}
 
-    public record RegisterDevice(@Schema(example = "demo-push-token") @NotBlank @Size(max = 4096) String pushToken) {}
+    public record RegisterDevice(
+            @Schema(example = "demo-push-token") @NotBlank @Size(max = 4096)
+            String pushToken) {}
 
     public static Ulid id(String value) {
         try {
