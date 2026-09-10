@@ -4,3 +4,41 @@ spring:
   cassandra:
     keyspace-name: chatapp
     schema-action: none
+    request:
+      consistency: LOCAL_QUORUM
+      serial-consistency: LOCAL_SERIAL
+  threads:
+    virtual:
+      enabled: true
+
+chat:
+  security:
+    issuer: ${CHAT_JWT_ISSUER:http://localhost:9002}
+    jwk-set-uri: ${CHAT_JWT_JWK_SET_URI:http://localhost:9002/.well-known/jwks.json}
+    audience: ${CHAT_JWT_AUDIENCE:chatapp}
+    allowed-origins: ${CHAT_ALLOWED_ORIGINS:http://localhost:3000}
+  socket:
+    heartbeat-interval: 30s
+    idle-timeout: 90s
+    max-pending-messages: 256
+    send-buffer-bytes: 524288
+    send-time-limit: 10s
+    max-frame-bytes: 65536
+    max-text-bytes: 8192
+  storage:
+    endpoint: ${CHAT_S3_ENDPOINT:http://localhost:9000}
+    public-endpoint: ${CHAT_S3_PUBLIC_ENDPOINT:http://localhost:9000}
+    region: ${CHAT_S3_REGION:us-east-1}
+    bucket: ${CHAT_S3_BUCKET:chat-media}
+    access-key: ${CHAT_S3_ACCESS_KEY:}
+    secret-key: ${CHAT_S3_SECRET_KEY:}
+    max-upload-bytes: 26214400
+    upload-url-ttl: 10m
+    download-url-ttl: 15m
+    intent-ttl: 24h
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

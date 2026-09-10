@@ -1,0 +1,18 @@
+server:
+  address: 127.0.0.1
+chat:
+  security:
+    issuer: http://localhost:${server.port:8080}/dev
+    jwk-set-uri: http://localhost:${server.port:8080}/dev/jwks
+    allowed-origins: http://localhost:${server.port:8080},http://127.0.0.1:${server.port:8080}
+  storage:
+    access-key: chatapp
+    secret-key: chatapp123
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    persist-authorization: false
+  paths-to-match: /api/**
+  override-with-generic-response: false

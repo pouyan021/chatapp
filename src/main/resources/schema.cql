@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS messages_by_chat (
     body text,
     media_bucket text,
     media_key text,
+    media_version_id text,
     media_size_bytes bigint,
     PRIMARY KEY (chat_id, created_at, message_id)
 ) WITH CLUSTERING ORDER BY (created_at DESC, message_id DESC);
@@ -55,4 +56,27 @@ CREATE TABLE IF NOT EXISTS devices_by_user (
     push_token text,
     last_seen_at timestamp,
     PRIMARY KEY (user_id, device_id)
+);
+
+-- Durable idempotency keys. No TTL: retries retain their canonical message identity.
+CREATE TABLE IF NOT EXISTS send_reservations (
+    chat_id blob,
+    sender_id blob,
+    client_message_id blob,
+    message_id blob,
+    created_at timestamp,
+    payload_hash text,
+    PRIMARY KEY ((chat_id, sender_id), client_message_id)
+);
+
+-- Upload authorization expires independently of objects referenced by messages.
+CREATE TABLE IF NOT EXISTS media_uploads (
+    upload_id blob PRIMARY KEY,
+    user_id blob,
+    chat_id blob,
+    bucket text,
+    object_key text,
+    size_bytes bigint,
+    content_type text,
+    expires_at timestamp
 );

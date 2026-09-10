@@ -36,4 +36,7 @@ public class Message {
 
     @Column("media_size_bytes")
     private Long mediaSizeBytes;
+
+    @Column("media_version_id")
+    private String mediaVersionId;
 }

@@ -4,8 +4,13 @@ spring-boot = "4.1.1"
 spring-dependency-management = "1.1.7"
 spotless = "8.10.2"
 ulid-creator = "5.2.4"
+aws-sdk = "2.31.0"
+springdoc = "3.1.1"
 
 [libraries]
+springdoc-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+aws-bom = { module = "software.amazon.awssdk:bom", version.ref = "aws-sdk" }
+aws-s3 = { module = "software.amazon.awssdk:s3" }
 ulid-creator = { module = "com.github.f4b6a3:ulid-creator", version.ref = "ulid-creator" }
 
 # Versions are managed by Spring Boot's dependency management.
@@ -14,14 +19,17 @@ micrometer-prometheus = { module = "io.micrometer:micrometer-registry-prometheus
 spring-boot-docker-compose = { module = "org.springframework.boot:spring-boot-docker-compose" }
 spring-boot-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-cassandra = { module = "org.springframework.boot:spring-boot-starter-data-cassandra" }
+spring-boot-security = { module = "org.springframework.boot:spring-boot-starter-security-oauth2-resource-server" }
 spring-boot-opentelemetry = { module = "org.springframework.boot:spring-boot-starter-opentelemetry" }
-spring-boot-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }
+spring-boot-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-boot-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc" }
 spring-boot-websocket = { module = "org.springframework.boot:spring-boot-starter-websocket" }
+spring-security-messaging = { module = "org.springframework.security:spring-security-messaging" }
 spring-boot-test-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator-test" }
 spring-boot-test-cassandra = { module = "org.springframework.boot:spring-boot-starter-data-cassandra-test" }
 spring-boot-test-opentelemetry = { module = "org.springframework.boot:spring-boot-starter-opentelemetry-test" }
-spring-boot-test-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux-test" }
-spring-boot-test-websocket = { module = "org.springframework.boot:spring-boot-starter-websocket-test" }
+spring-boot-test-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc-test" }
+spring-security-test = { module = "org.springframework.security:spring-security-test" }
 spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
 testcontainers-cassandra = { module = "org.testcontainers:testcontainers-cassandra" }
 testcontainers-grafana = { module = "org.testcontainers:testcontainers-grafana" }

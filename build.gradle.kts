@@ -30,17 +30,23 @@ dependencies {
     annotationProcessor(libs.lombok)
     runtimeOnly(libs.spring.boot.docker.compose)
     runtimeOnly(libs.micrometer.prometheus)
+    implementation(platform(libs.aws.bom))
+    implementation(libs.aws.s3)
+    implementation(libs.spring.boot.security)
     implementation(libs.ulid.creator)
     implementation(libs.spring.boot.actuator)
     implementation(libs.spring.boot.cassandra)
     implementation(libs.spring.boot.opentelemetry)
-    implementation(libs.spring.boot.webflux)
+    implementation(libs.spring.boot.validation)
+    implementation(libs.spring.boot.webmvc)
+    implementation(libs.springdoc.webmvc.ui)
     implementation(libs.spring.boot.websocket)
+    implementation(libs.spring.security.messaging)
     testImplementation(libs.spring.boot.test.actuator)
     testImplementation(libs.spring.boot.test.cassandra)
     testImplementation(libs.spring.boot.test.opentelemetry)
-    testImplementation(libs.spring.boot.test.webflux)
-    testImplementation(libs.spring.boot.test.websocket)
+    testImplementation(libs.spring.boot.test.webmvc)
+    testImplementation(libs.spring.security.test)
     testImplementation(libs.spring.boot.testcontainers)
     testImplementation(libs.testcontainers.cassandra)
     testImplementation(libs.testcontainers.grafana)
@@ -50,4 +56,10 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+tasks.processResources {
+    from("docs/stomp.md") {
+        into("dev-assets")
+    }
 }

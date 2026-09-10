@@ -39,7 +39,7 @@ class CassandraUlidConfigurationTests {
         assertThat(chat).containsEntry(CqlIdentifier.fromCql("chat_id"), ByteBuffer.wrap(chatId.toBytes()));
 
         Message message =
-                new Message(new MessageKey(chatId, now, messageId), userId, "text", "Hello", null, null, null);
+                new Message(new MessageKey(chatId, now, messageId), userId, "text", "Hello", null, null, null, null);
         Map<CqlIdentifier, Object> columns = write(converter, message);
         assertThat(columns)
                 .containsEntry(CqlIdentifier.fromCql("chat_id"), ByteBuffer.wrap(chatId.toBytes()))
