@@ -1,6 +1,7 @@
 package com.kutumlabs.chatapp.support;
 
 import com.github.f4b6a3.ulid.Ulid;
+import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
@@ -10,6 +11,7 @@ import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -33,8 +35,8 @@ public final class TestJwtIssuer implements AutoCloseable {
                 }
             });
             server.start();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
+        } catch (JOSEException | IOException e) {
+            throw new IllegalStateException("Could not initialize the test JWT issuer", e);
         }
     }
 
@@ -67,8 +69,8 @@ public final class TestJwtIssuer implements AutoCloseable {
                     claims);
             jwt.sign(new RSASSASigner(key));
             return jwt.serialize();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
+        } catch (JOSEException e) {
+            throw new IllegalStateException("Could not sign the test JWT", e);
         }
     }
 

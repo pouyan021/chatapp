@@ -11,6 +11,7 @@ import com.kutumlabs.chatapp.socket.ConnectionRegistry;
 import com.kutumlabs.chatapp.socket.SendResult;
 import com.kutumlabs.chatapp.support.TestJwtIssuer;
 import com.kutumlabs.chatapp.support.TestStomp;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -18,6 +19,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -240,7 +243,8 @@ class ChatIntegrationTests {
     }
 
     @Test
-    void concurrentRetriesUseOneCassandraMessageAndConflictingPayloadFails() {
+    void concurrentRetriesUseOneCassandraMessageAndConflictingPayloadFails()
+            throws InterruptedException, ExecutionException, TimeoutException {
         var owner = UlidCreator.getMonotonicUlid();
         var chat = create(owner, UlidCreator.getMonotonicUlid());
         String clientId = UlidCreator.getMonotonicUlid().toString();
@@ -251,8 +255,6 @@ class ChatIntegrationTests {
                     .mapToObj(_ -> executor.submit(() -> chats.send(owner, command)))
                     .toList();
             for (var task : tasks) messages.add(task.get(30, java.util.concurrent.TimeUnit.SECONDS));
-        } catch (Exception error) {
-            throw new AssertionError(error);
         }
         assertThat(messages.stream().map(StoredMessage::messageId).distinct().toList())
                 .hasSize(1);
@@ -424,7 +426,7 @@ class ChatIntegrationTests {
     }
 
     @Test
-    void versionedMediaCannotBeReplacedAndUrlsRequireMembershipAndExpire() throws Exception {
+    void versionedMediaCannotBeReplacedAndUrlsRequireMembershipAndExpire() throws IOException, InterruptedException {
         var owner = UlidCreator.getMonotonicUlid();
         var recipient = UlidCreator.getMonotonicUlid();
         var chat = create(owner, recipient);
@@ -507,7 +509,7 @@ class ChatIntegrationTests {
                 .getResponseBody();
     }
 
-    private String put(ObjectStorage.SignedUpload grant, String body) throws Exception {
+    private String put(ObjectStorage.SignedUpload grant, String body) throws IOException, InterruptedException {
         var request = HttpRequest.newBuilder(URI.create(grant.url())).PUT(HttpRequest.BodyPublishers.ofString(body));
         grant.headers().forEach((name, values) -> {
             if (!name.equalsIgnoreCase("content-length") && !name.equalsIgnoreCase("host")) {
