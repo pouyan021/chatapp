@@ -6,8 +6,12 @@ spotless = "8.10.2"
 ulid-creator = "5.2.4"
 aws-sdk = "2.31.0"
 springdoc = "3.1.1"
+# Align the appender incubator API with Spring Boot 4.1.1 / OpenTelemetry 1.62.0.
+otel-instrumentation = "2.28.1-alpha"
 
 [libraries]
+spring-boot-aspectj = { module = "org.springframework.boot:spring-boot-starter-aspectj" }
+otel-logback = { module = "io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0", version.ref = "otel-instrumentation" }
 springdoc-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 aws-bom = { module = "software.amazon.awssdk:bom", version.ref = "aws-sdk" }
 aws-s3 = { module = "software.amazon.awssdk:s3" }

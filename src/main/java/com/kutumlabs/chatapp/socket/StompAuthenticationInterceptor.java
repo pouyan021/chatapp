@@ -2,6 +2,7 @@ package com.kutumlabs.chatapp.socket;
 
 import com.kutumlabs.chatapp.chat.ChatModels;
 import com.kutumlabs.chatapp.config.ChatProperties;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.List;
 import java.util.Set;
@@ -21,13 +22,19 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
     private static final Set<String> SUBSCRIPTIONS =
             Set.of("/user/queue/messages", "/user/queue/results", "/user/queue/connection");
     private static final Set<String> SENDS = Set.of("/app/v1/message.send", "/app/v1/connection.info");
+    private final MeterRegistry metrics;
     private final JwtDecoder decoder;
     private final ConnectionRegistry connections;
     private final ChatProperties properties;
     private final Clock clock;
 
     public StompAuthenticationInterceptor(
-            JwtDecoder decoder, ConnectionRegistry connections, ChatProperties properties, Clock clock) {
+            JwtDecoder decoder,
+            ConnectionRegistry connections,
+            ChatProperties properties,
+            Clock clock,
+            MeterRegistry metrics) {
+        this.metrics = metrics;
         this.decoder = decoder;
         this.connections = connections;
         this.properties = properties;
@@ -36,6 +43,18 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
+        try {
+            return authenticate(message);
+        } catch (RuntimeException error) {
+            var command = StompHeaderAccessor.wrap(message).getCommand();
+            String stage =
+                    command == StompCommand.CONNECT || command == StompCommand.STOMP ? "authentication" : "protocol";
+            metrics.counter("chat.stomp.rejected", "stage", stage).increment();
+            throw error;
+        }
+    }
+
+    private Message<?> authenticate(Message<?> message) {
         var headers = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         if (headers == null) throw new IllegalArgumentException("STOMP required");
         String sessionId = headers.getSessionId();

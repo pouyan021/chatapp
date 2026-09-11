@@ -1,6 +1,7 @@
 spring:
   application:
     name: chatapp
+    instance-id: ${CHAT_INSTANCE_ID:chatapp-${server.port:8080}}
   cassandra:
     keyspace-name: chatapp
     schema-action: none
@@ -42,3 +43,38 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+
+logging:
+  structured:
+    format:
+      console: logstash
+management:
+  tracing:
+    sampling:
+      probability: 0.1
+    export:
+      otlp:
+        enabled: false
+  logging:
+    export:
+      otlp:
+        enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  opentelemetry:
+    resource-attributes:
+      "service.instance.id": ${spring.application.instance-id}
+  metrics:
+    tags:
+      service: ${spring.application.name}
+      instance: ${spring.application.instance-id}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        chat.stomp: true
+        chat.operation: true
+        chat.persistence: true
+        chat.storage: true
+        chat.dispatch: true

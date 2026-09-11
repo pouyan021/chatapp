@@ -1,4 +1,26 @@
 services:
+  telemetry:
+    image: grafana/otel-lgtm:0.32.1
+    profiles: [observability]
+    labels:
+      org.springframework.boot.ignore: "true"
+    ports:
+      - "127.0.0.1:3001:3000"
+      - "127.0.0.1:4318:4318"
+    environment:
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 5s
+    volumes:
+      - telemetry-data:/data
+      - ./observability/dashboard-provider.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/chatapp.yaml:ro
+      - ./observability/dashboards:/otel-lgtm/grafana/conf/provisioning/dashboards/custom:ro
+      - ./observability/loki-config.yaml:/otel-lgtm/loki-config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
   cassandra:
     image: cassandra:5.0
     ports:
@@ -80,5 +102,6 @@ services:
         condition: service_completed_successfully
 
 volumes:
+  telemetry-data:
   cassandra-data:
   minio-data:

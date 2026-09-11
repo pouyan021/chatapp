@@ -18,6 +18,8 @@ The dev profile uses a separate `chatapp_dev` keyspace initialized from the curr
 
 Use `localhost` or `127.0.0.1`, consistently. The dev server binds to loopback. The page bundles its browser dependencies, so it needs no frontend server or runtime CDN access. A different port can be selected with `--server.port=8081`; dev JWT and allowed-origin defaults follow that port.
 
+For optional metrics dashboards, searchable logs, and traces, see [local observability](observability.md).
+
 ## Two-tab walkthrough
 
 1. Open the playground in two tabs. Keep Alice in the first; choose Bob in the second. Click **Connect** in both and check their connected status and separate device IDs.

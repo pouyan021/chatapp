@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -34,6 +36,8 @@ public class ConnectionRegistry {
             lastSeenAt = now;
         }
     }
+
+    private static final Logger log = LoggerFactory.getLogger(ConnectionRegistry.class);
 
     private final ConcurrentHashMap<String, Connection> connections = new ConcurrentHashMap<>();
     private final AtomicInteger active = new AtomicInteger();
@@ -122,10 +126,17 @@ public class ConnectionRegistry {
     public void close(String sessionId, CloseStatus status) {
         var connection = connections.get(sessionId);
         if (connection == null) return;
+        metrics.counter("chat.connections.close.requests", "reason", closeReason(status))
+                .increment();
         try {
             connection.socket.close(status);
         } catch (IOException error) {
-            metrics.counter("chat.delivery.failures").increment();
+            metrics.counter("chat.connections.close.failures").increment();
+            log.atWarn()
+                    .setCause(error)
+                    .addKeyValue("event", "connection.close.failed")
+                    .addKeyValue("sessionId", sessionId)
+                    .log("Connection close failed");
         } finally {
             removed(sessionId);
         }
@@ -164,11 +175,24 @@ public class ConnectionRegistry {
         return connection;
     }
 
+    private static String closeReason(CloseStatus status) {
+        return switch (status.getCode()) {
+            case 1000 -> "normal";
+            case 1001 -> "going_away";
+            case 1008 -> "policy_violation";
+            default -> "other";
+        };
+    }
+
     private void touch(SessionIdentity identity) {
         try {
             store.touchDevice(identity.userId(), identity.deviceId(), clock.instant());
         } catch (RuntimeException error) {
-            metrics.counter("chat.persistence.failures").increment();
+            // The storage observation owns persistence failure counting.
+            log.atWarn()
+                    .setCause(error)
+                    .addKeyValue("event", "device.touch.failed")
+                    .log("Device activity update failed");
         }
     }
 }

@@ -116,8 +116,6 @@ public class ChatService {
             return message;
         } catch (RuntimeException error) {
             metrics.counter("chat.messages.rejected").increment();
-            if (!(error instanceof ChatFailure))
-                metrics.counter("chat.persistence.failures").increment();
             throw error;
         }
     }

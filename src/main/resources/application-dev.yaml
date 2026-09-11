@@ -19,3 +19,12 @@ springdoc:
     persist-authorization: false
   paths-to-match: /api/**
   override-with-generic-response: false
+
+logging:
+  structured:
+    format:
+      console: ""
+management:
+  tracing:
+    sampling:
+      probability: 1.0

@@ -1,10 +1,14 @@
 package com.kutumlabs.chatapp.config;
 
+import com.kutumlabs.chatapp.observability.ChatTelemetry;
+import com.kutumlabs.chatapp.observability.StompObservations;
 import com.kutumlabs.chatapp.socket.ConnectionRegistry;
 import com.kutumlabs.chatapp.socket.StompAuthenticationInterceptor;
+import org.slf4j.MDC;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -20,12 +24,17 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 @Configuration
 @EnableWebSocketMessageBroker
 public class StompConfiguration implements WebSocketMessageBrokerConfigurer {
+    private final StompObservations observations;
     private final ChatProperties properties;
     private final ConnectionRegistry connections;
     private final StompAuthenticationInterceptor authentication;
 
     public StompConfiguration(
-            ChatProperties properties, ConnectionRegistry connections, StompAuthenticationInterceptor authentication) {
+            ChatProperties properties,
+            ConnectionRegistry connections,
+            StompAuthenticationInterceptor authentication,
+            StompObservations observations) {
+        this.observations = observations;
         this.properties = properties;
         this.connections = connections;
         this.authentication = authentication;
@@ -35,6 +44,20 @@ public class StompConfiguration implements WebSocketMessageBrokerConfigurer {
     public SimpleAsyncTaskExecutor stompExecutor() {
         var executor = new SimpleAsyncTaskExecutor("stomp-");
         executor.setVirtualThreads(true);
+        var propagation = new ContextPropagatingTaskDecorator();
+        executor.setTaskDecorator(task -> {
+            var captured = MDC.getCopyOfContextMap();
+            var propagated = propagation.decorate(task);
+            return () -> {
+                var previous = MDC.getCopyOfContextMap();
+                try {
+                    ChatTelemetry.restore(captured);
+                    propagated.run();
+                } finally {
+                    ChatTelemetry.restore(previous);
+                }
+            };
+        });
         executor.setConcurrencyLimit(properties.socket().maxPendingMessages());
         executor.setRejectTasksWhenLimitReached(true);
         executor.setTaskTerminationTimeout(5000);
@@ -78,7 +101,7 @@ public class StompConfiguration implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.executor(stompExecutor()).interceptors(authentication);
+        registration.executor(stompExecutor()).interceptors(authentication, observations);
     }
 
     @Override

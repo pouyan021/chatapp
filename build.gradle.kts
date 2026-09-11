@@ -34,6 +34,8 @@ dependencies {
     implementation(libs.aws.s3)
     implementation(libs.spring.boot.security)
     implementation(libs.ulid.creator)
+    implementation(libs.spring.boot.aspectj)
+    implementation(libs.otel.logback)
     implementation(libs.spring.boot.actuator)
     implementation(libs.spring.boot.cassandra)
     implementation(libs.spring.boot.opentelemetry)
