@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kutumlabs.testfixture.DevWebHarness;
 import com.nimbusds.jwt.SignedJWT;
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.text.ParseException;
 import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -31,7 +33,7 @@ class DevWebTests extends DevWebHarness {
     private static int availablePort() {
         try (var socket = new ServerSocket(0)) {
             return socket.getLocalPort();
-        } catch (Exception error) {
+        } catch (IOException error) {
             throw new IllegalStateException(error);
         }
     }
@@ -41,7 +43,8 @@ class DevWebTests extends DevWebHarness {
         registry.add("server.port", () -> PORT);
     }
 
-    private HttpResponse<String> request(String path, String body, String token) throws Exception {
+    private HttpResponse<String> request(String path, String body, String token)
+            throws IOException, InterruptedException {
         var builder = HttpRequest.newBuilder(URI.create("http://localhost:" + PORT + path));
         if (body != null)
             builder.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body));
@@ -52,7 +55,8 @@ class DevWebTests extends DevWebHarness {
     }
 
     @Test
-    void issuesOnlyDemoIdentitiesAndValidatesRealSignaturesForProtectedApis() throws Exception {
+    void issuesOnlyDemoIdentitiesAndValidatesRealSignaturesForProtectedApis()
+            throws IOException, InterruptedException, ParseException {
         assertThat(request("/api/chats", null, null).statusCode()).isEqualTo(401);
         for (String identity : DevController.USERS.keySet()) {
             var response = request("/dev/token", "{\"identity\":\"" + identity + "\"}", null);
@@ -83,7 +87,7 @@ class DevWebTests extends DevWebHarness {
     }
 
     @Test
-    void servesPlaygroundAndDocumentsActualRestContracts() throws Exception {
+    void servesPlaygroundAndDocumentsActualRestContracts() throws IOException, InterruptedException {
         assertThat(request("/dev/chat", null, null).body()).contains("Chat lab", "/dev/assets/chat.js");
         assertThat(request("/dev/assets/chat.js", null, null).statusCode()).isEqualTo(200);
         assertThat(request("/dev/protocol", null, null).body()).contains("/app/v1/message.send");
@@ -129,7 +133,8 @@ class DevWebTests extends DevWebHarness {
     }
 
     @Test
-    void preservesResponseContractsAndParameterDocumentationWithSharedMetadata() throws Exception {
+    void preservesResponseContractsAndParameterDocumentationWithSharedMetadata()
+            throws IOException, InterruptedException {
         JsonNode spec = JSON.readTree(request("/v3/api-docs", null, null).body());
         var expectedResponses = Map.of(
                 "post /api/chats", "201 400 401 503",

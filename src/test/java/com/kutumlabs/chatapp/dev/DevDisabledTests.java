@@ -3,6 +3,7 @@ package com.kutumlabs.chatapp.dev;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kutumlabs.testfixture.DevWebHarness;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -25,7 +26,7 @@ class DevDisabledTests extends DevWebHarness {
     ApplicationContext context;
 
     @Test
-    void demoAndDocumentationAreUnavailableWithoutDevProfile() throws Exception {
+    void demoAndDocumentationAreUnavailableWithoutDevProfile() throws IOException, InterruptedException {
         assertThat(context.getBeansOfType(DevController.class)).isEmpty();
         assertThat(context.getBeansOfType(DevConfiguration.class)).isEmpty();
         try (var client = HttpClient.newHttpClient()) {

@@ -2,6 +2,7 @@ package com.kutumlabs.chatapp.dev;
 
 import com.kutumlabs.chatapp.chat.ChatFailure;
 import com.kutumlabs.chatapp.config.ChatProperties;
+import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
@@ -12,7 +13,6 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Date;
 import java.util.Map;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ClassPathResource;
@@ -31,7 +31,7 @@ public class DevController {
     private final ChatProperties properties;
     private final Clock clock;
 
-    public DevController(ChatProperties properties, Clock clock) throws Exception {
+    public DevController(ChatProperties properties, Clock clock) throws JOSEException {
         this.properties = properties;
         this.clock = clock;
         this.key = new RSAKeyGenerator(2048)
@@ -44,7 +44,7 @@ public class DevController {
     public record TokenResponse(String token, Instant expiresAt, String userId) {}
 
     @PostMapping("/token")
-    public ResponseEntity<TokenResponse> token(@RequestBody TokenRequest request) throws Exception {
+    public ResponseEntity<TokenResponse> token(@RequestBody TokenRequest request) throws JOSEException {
         String userId = request.identity() == null ? null : USERS.get(request.identity());
         if (userId == null) throw ChatFailure.invalid("Choose alice or bob");
         Instant now = clock.instant();
@@ -54,8 +54,8 @@ public class DevController {
                 .subject(request.identity())
                 .audience(properties.security().audience())
                 .claim("user_id", userId)
-                .issueTime(Date.from(now))
-                .expirationTime(Date.from(expiresAt))
+                .claim("iat", now.getEpochSecond())
+                .claim("exp", expiresAt.getEpochSecond())
                 .build();
         var jwt = new SignedJWT(
                 new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(key.getKeyID()).build(), claims);
