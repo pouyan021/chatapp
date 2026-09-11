@@ -35,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.cassandra.core.CassandraOperations;
 import org.springframework.data.cassandra.core.InsertOptions;
 import org.springframework.data.cassandra.core.query.CassandraPageRequest;
@@ -43,8 +44,14 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@RequiredArgsConstructor
 public class CassandraChatStore implements ChatStore {
+
     private static final Duration SUMMARY_TTL = Duration.ofDays(30);
+    public static final String CHAT_ID = "chat_id";
+    public static final String MESSAGE_ID = "message_id";
+    public static final String CREATED_AT = "created_at";
+    public static final String PAYLOAD_HASH = "payload_hash";
 
     private final CqlSession session;
     private final CassandraOperations cassandraOperations;
@@ -54,25 +61,6 @@ public class CassandraChatStore implements ChatStore {
     private final UserDeviceRepository userDeviceRepository;
     private final ChatSummaryRepository chatSummaryRepository;
     private final ChatReadStateRepository chatReadStateRepository;
-
-    public CassandraChatStore(
-            CqlSession session,
-            CassandraOperations cassandraOperations,
-            ChatRepository chatRepository,
-            ChatParticipantRepository chatParticipantRepository,
-            MessageRepository messageRepository,
-            UserDeviceRepository userDeviceRepository,
-            ChatSummaryRepository chatSummaryRepository,
-            ChatReadStateRepository chatReadStateRepository) {
-        this.session = session;
-        this.cassandraOperations = cassandraOperations;
-        this.chatRepository = chatRepository;
-        this.chatParticipantRepository = chatParticipantRepository;
-        this.messageRepository = messageRepository;
-        this.userDeviceRepository = userDeviceRepository;
-        this.chatSummaryRepository = chatSummaryRepository;
-        this.chatReadStateRepository = chatReadStateRepository;
-    }
 
     // send_reservations and media_uploads have no Spring Data entity; they stay on the driver directly
     // because both need INSERT ... IF NOT EXISTS / USING TTL, which plain repositories can't express.
@@ -150,12 +138,12 @@ public class CassandraChatStore implements ChatStore {
     @Override
     public Reservation reserve(Reservation candidate) {
         var result = execute(insertInto("send_reservations")
-                .value("chat_id", bindMarker())
+                .value(CHAT_ID, bindMarker())
                 .value("sender_id", bindMarker())
                 .value("client_message_id", bindMarker())
-                .value("message_id", bindMarker())
-                .value("created_at", bindMarker())
-                .value("payload_hash", bindMarker())
+                .value(MESSAGE_ID, bindMarker())
+                .value(CREATED_AT, bindMarker())
+                .value(PAYLOAD_HASH, bindMarker())
                 .ifNotExists()
                 .build(
                         blob(candidate.chatId()),
@@ -166,8 +154,8 @@ public class CassandraChatStore implements ChatStore {
                         candidate.payloadHash()));
         if (result.wasApplied()) return candidate;
         Row row = execute(selectFrom("send_reservations")
-                        .columns("message_id", "created_at", "payload_hash")
-                        .whereColumn("chat_id")
+                        .columns(MESSAGE_ID, CREATED_AT, PAYLOAD_HASH)
+                        .whereColumn(CHAT_ID)
                         .isEqualTo(bindMarker())
                         .whereColumn("sender_id")
                         .isEqualTo(bindMarker())
@@ -180,9 +168,9 @@ public class CassandraChatStore implements ChatStore {
                 candidate.chatId(),
                 candidate.senderId(),
                 candidate.clientMessageId(),
-                id(row, "message_id"),
-                row.getInstant("created_at"),
-                row.getString("payload_hash"));
+                id(row, MESSAGE_ID),
+                row.getInstant(CREATED_AT),
+                row.getString(PAYLOAD_HASH));
     }
 
     @Override
@@ -226,7 +214,7 @@ public class CassandraChatStore implements ChatStore {
         execute(insertInto("media_uploads")
                 .value("upload_id", bindMarker())
                 .value("user_id", bindMarker())
-                .value("chat_id", bindMarker())
+                .value(CHAT_ID, bindMarker())
                 .value("bucket", bindMarker())
                 .value("object_key", bindMarker())
                 .value("size_bytes", bindMarker())
@@ -256,7 +244,7 @@ public class CassandraChatStore implements ChatStore {
                 .map(row -> new UploadIntent(
                         uploadId,
                         id(row, "user_id"),
-                        id(row, "chat_id"),
+                        id(row, CHAT_ID),
                         row.getString("bucket"),
                         row.getString("object_key"),
                         row.getLong("size_bytes"),
