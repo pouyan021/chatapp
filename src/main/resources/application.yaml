@@ -26,6 +26,11 @@ chat:
     send-time-limit: 10s
     max-frame-bytes: 65536
     max-text-bytes: 8192
+  broker:
+    host: ${CHAT_BROKER_HOST:localhost}
+    port: ${CHAT_BROKER_PORT:61613}
+    login: ${CHAT_BROKER_LOGIN:}
+    passcode: ${CHAT_BROKER_PASSCODE:}
   storage:
     endpoint: ${CHAT_S3_ENDPOINT:http://localhost:9000}
     public-endpoint: ${CHAT_S3_PUBLIC_ENDPOINT:http://localhost:9000}

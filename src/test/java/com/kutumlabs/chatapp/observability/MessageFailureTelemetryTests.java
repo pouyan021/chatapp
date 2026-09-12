@@ -80,19 +80,16 @@ class MessageFailureTelemetryTests {
     }
 
     @Test
-    void partialFanOutContinuesToOtherSessions() {
+    void partialFanOutContinuesToOtherParticipants() {
         ChatStore store = mock(ChatStore.class);
-        when(store.participants(stored.chatId())).thenReturn(List.of(stored.senderId()));
-        when(connections.list(stored.senderId()))
-                .thenReturn(List.of(
-                        new ConnectionRegistry.SessionView("broken", "one", Instant.EPOCH, Instant.EPOCH, Instant.MAX),
-                        new ConnectionRegistry.SessionView(
-                                "healthy", "two", Instant.EPOCH, Instant.EPOCH, Instant.MAX)));
+        var broken = UlidCreator.getMonotonicUlid();
+        var healthy = UlidCreator.getMonotonicUlid();
+        when(store.participants(stored.chatId())).thenReturn(List.of(broken, healthy));
         doThrow(new IllegalStateException("closed"))
                 .when(messaging)
-                .convertAndSendToUser(eq("broken"), anyString(), any(), anyMap());
-        new LocalMessageDispatcher(store, connections, messaging, metrics, telemetry).dispatch(stored);
-        verify(messaging).convertAndSendToUser(eq("healthy"), eq("/queue/messages"), any(), anyMap());
+                .convertAndSendToUser(eq(broken.toString()), anyString(), any());
+        new BrokerMessageDispatcher(store, messaging, metrics, telemetry).dispatch(stored);
+        verify(messaging).convertAndSendToUser(eq(healthy.toString()), eq("/queue/messages"), any());
         assertThat(metrics.get("chat.delivery.submitted").counter().count()).isEqualTo(1);
         assertThat(metrics.get("chat.delivery.failures").counter().count()).isEqualTo(1);
     }

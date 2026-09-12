@@ -11,7 +11,6 @@ import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -65,15 +64,6 @@ public class StompConfiguration implements WebSocketMessageBrokerConfigurer {
     }
 
     @Bean
-    public ThreadPoolTaskScheduler stompScheduler() {
-        var scheduler = new ThreadPoolTaskScheduler();
-        scheduler.setPoolSize(2);
-        scheduler.setThreadNamePrefix("stomp-heartbeat-");
-        scheduler.setRemoveOnCancelPolicy(true);
-        return scheduler;
-    }
-
-    @Bean
     public ServletServerContainerFactoryBean webSocketContainer() {
         var container = new ServletServerContainerFactoryBean();
         container.setMaxTextMessageBufferSize(properties.socket().maxFrameBytes());
@@ -84,7 +74,6 @@ public class StompConfiguration implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.setPreserveReceiveOrder(true);
         registry.addEndpoint("/ws/chat")
                 .setAllowedOrigins(properties.security().allowedOrigins().toArray(String[]::new));
     }
@@ -93,10 +82,19 @@ public class StompConfiguration implements WebSocketMessageBrokerConfigurer {
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
-        long interval = properties.socket().heartbeatInterval().toMillis();
-        registry.enableSimpleBroker("/queue")
-                .setHeartbeatValue(new long[] {interval, interval})
-                .setTaskScheduler(stompScheduler());
+        var broker = properties.broker();
+        // Clients only ever use "/queue" (see StompAuthenticationInterceptor); "/topic" is registered purely so the
+        // relay carries the two broadcast destinations below - without it those broadcasts silently go nowhere and
+        // cross-node delivery falls back to node-local only.
+        registry.enableStompBrokerRelay("/queue", "/topic")
+                .setRelayHost(broker.host())
+                .setRelayPort(broker.port())
+                .setClientLogin(broker.login())
+                .setClientPasscode(broker.passcode())
+                .setSystemLogin(broker.login())
+                .setSystemPasscode(broker.passcode())
+                .setUserDestinationBroadcast("/topic/unresolved-user-destination")
+                .setUserRegistryBroadcast("/topic/simp-user-registry");
     }
 
     @Override

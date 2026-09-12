@@ -29,6 +29,7 @@ public final class TestSettings {
                         Duration.ofSeconds(10),
                         65536,
                         8192),
+                new ChatProperties.Broker("localhost", 61613, "test", "test"),
                 new ChatProperties.Storage(
                         URI.create("http://localhost:9000"),
                         URI.create("http://localhost:9000"),

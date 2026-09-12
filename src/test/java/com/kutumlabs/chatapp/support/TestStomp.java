@@ -7,13 +7,17 @@ import com.kutumlabs.chatapp.socket.SendResult;
 import java.lang.reflect.Type;
 import java.net.URI;
 import java.time.Duration;
-import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.tomcat.websocket.WsWebSocketContainer;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.converter.StringMessageConverter;
 import org.springframework.messaging.simp.stomp.*;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
@@ -26,11 +30,15 @@ public final class TestStomp implements AutoCloseable {
     private final Map<String, CompletableFuture<String>> replies = new ConcurrentHashMap<>();
     private final BlockingQueue<MessageView> messages = new LinkedBlockingQueue<>();
     private final CompletableFuture<Throwable> failure = new CompletableFuture<>();
+    private final Set<CompletableFuture<?>> pending = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean closed = new AtomicBoolean();
+    private final WsWebSocketContainer container = new WsWebSocketContainer();
+    private final ThreadPoolTaskExecutor connector = new ThreadPoolTaskExecutor();
     private final ThreadPoolTaskScheduler scheduler;
     private final WebSocketStompClient client;
-    private StompSession session;
+    private final StompSession session;
     private StompSession.Subscription subscription;
-    private SessionView info;
+    private final SessionView info;
 
     public TestStomp(URI uri, String jwt, String device) {
         this(uri, jwt, device, true, "http://localhost:3000");
@@ -40,14 +48,26 @@ public final class TestStomp implements AutoCloseable {
         scheduler = new ThreadPoolTaskScheduler() {
             @Override
             public ScheduledFuture<?> scheduleWithFixedDelay(Runnable task, Duration delay) {
-                return heartbeat
-                        ? super.scheduleWithFixedDelay(task, delay)
-                        : super.schedule(task, Instant.now().plusSeconds(60));
+                // Negotiate heartbeats normally, but simulate a silent peer when requested.
+                return super.scheduleWithFixedDelay(
+                        () -> {
+                            if (heartbeat) task.run();
+                        },
+                        delay);
             }
         };
         scheduler.setPoolSize(1);
-        scheduler.initialize();
-        client = new WebSocketStompClient(new StandardWebSocketClient());
+        scheduler.setThreadNamePrefix("test-stomp-heartbeat-");
+        scheduler.setRemoveOnCancelPolicy(true);
+        scheduler.setAwaitTerminationSeconds(10);
+        connector.setCorePoolSize(1);
+        connector.setMaxPoolSize(1);
+        connector.setQueueCapacity(0);
+        connector.setThreadNamePrefix("test-stomp-connect-");
+        connector.setAwaitTerminationSeconds(10);
+        var socketClient = new StandardWebSocketClient(container);
+        socketClient.setTaskExecutor(connector);
+        client = new WebSocketStompClient(socketClient);
         client.setMessageConverter(new RawStringMessageConverter());
         client.setTaskScheduler(scheduler);
         client.setDefaultHeartbeat(new long[] {500, 500});
@@ -57,6 +77,8 @@ public final class TestStomp implements AutoCloseable {
         var handshake = new WebSocketHttpHeaders();
         if (origin != null) handshake.setOrigin(origin);
         try {
+            scheduler.initialize();
+            connector.initialize();
             session = client.connectAsync(uri, handshake, connect, new StompSessionHandlerAdapter() {
                         @Override
                         public Type getPayloadType(StompHeaders headers) {
@@ -80,19 +102,27 @@ public final class TestStomp implements AutoCloseable {
                         }
                     })
                     .get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-            session.subscribe("/user/queue/results", replyHandler());
-            session.subscribe("/user/queue/connection", replyHandler());
+            // Subscriptions and unsubscriptions are relayed to the broker asynchronously (unlike the old in-process
+            // simple broker, where registering a subscription was synchronous and immediate) - without waiting for a
+            // receipt, a send issued right after subscribing/unsubscribing can race the broker actually applying it.
+            awaitReceipt(subscribe("/user/queue/results", replyHandler()));
+            awaitReceipt(subscribe("/user/queue/connection", replyHandler()));
             subscribeMessages();
             info = request("/app/v1/connection.info", "", SessionView.class);
         } catch (Exception error) {
-            close();
+            if (error instanceof InterruptedException) Thread.currentThread().interrupt();
+            try {
+                close();
+            } catch (RuntimeException cleanupError) {
+                error.addSuppressed(cleanupError);
+            }
             throw new IllegalStateException("STOMP connection failed", error);
         }
     }
 
     private void failed(Throwable error) {
         failure.complete(error);
-        replies.values().forEach(reply -> reply.completeExceptionally(error));
+        pending.forEach(wait -> wait.completeExceptionally(error));
     }
 
     private StompFrameHandler replyHandler() {
@@ -104,7 +134,9 @@ public final class TestStomp implements AutoCloseable {
 
             @Override
             public void handleFrame(StompHeaders headers, Object payload) {
-                var reply = replies.get(headers.getFirst("request-id"));
+                String id = headers.getFirst("request-id");
+                if (id == null) return;
+                var reply = replies.get(id);
                 if (reply != null) reply.complete((String) payload);
             }
         };
@@ -132,16 +164,21 @@ public final class TestStomp implements AutoCloseable {
         headers.setContentType(org.springframework.util.MimeTypeUtils.APPLICATION_JSON);
         try {
             session.send(headers, body instanceof String s ? s : mapper.writeValueAsString(body));
-            return mapper.readValue(future.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS), type);
+            return mapper.readValue(awaitResult(future, "reply from " + destination), type);
         } catch (Exception error) {
-            throw new IllegalStateException("STOMP request failed", error);
+            throw new IllegalStateException("STOMP request failed: " + destination, error);
         } finally {
             replies.remove(id);
         }
     }
 
     public void subscribeMessages() {
-        subscription = session.subscribe("/user/queue/messages", new StompFrameHandler() {
+        awaitReceipt(subscribeMessagesWithoutWaiting());
+    }
+
+    /** Submit a subscription for tests that expect rejection instead of a receipt. */
+    public StompSession.Subscription subscribeMessagesWithoutWaiting() {
+        subscription = subscribe("/user/queue/messages", new StompFrameHandler() {
             @Override
             public Type getPayloadType(StompHeaders headers) {
                 return String.class;
@@ -152,17 +189,56 @@ public final class TestStomp implements AutoCloseable {
                 messages.add(mapper.readValue((String) payload, MessageView.class));
             }
         });
+        return subscription;
     }
 
     public void unsubscribeMessages() {
-        subscription.unsubscribe();
+        var headers = new StompHeaders();
+        headers.setReceipt(UUID.randomUUID().toString());
+        awaitReceipt(subscription.unsubscribe(headers));
+        subscription = null;
+    }
+
+    private StompSession.Subscription subscribe(String destination, StompFrameHandler handler) {
+        var headers = new StompHeaders();
+        headers.setDestination(destination);
+        headers.setReceipt(UUID.randomUUID().toString());
+        return session.subscribe(headers, handler);
+    }
+
+    private void awaitReceipt(StompSession.Receiptable receiptable) {
+        var receipt = new CompletableFuture<Void>();
+        receiptable.addReceiptTask(() -> receipt.complete(null));
+        receiptable.addReceiptLostTask(() -> receipt.completeExceptionally(new IllegalStateException("Receipt lost")));
+        awaitResult(receipt, "receipt " + receiptable.getReceiptId());
+    }
+
+    private <T> T awaitResult(CompletableFuture<T> result, String description) {
+        pending.add(result);
+        try {
+            Throwable error = failure.getNow(null);
+            if (error != null) result.completeExceptionally(error);
+            return result.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted waiting for STOMP " + description, error);
+        } catch (ExecutionException | TimeoutException error) {
+            throw new IllegalStateException("Failed waiting for STOMP " + description, error);
+        } finally {
+            pending.remove(result);
+        }
     }
 
     public MessageView awaitMessage() {
         try {
-            var message = messages.poll(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-            if (message == null) throw new AssertionError("No message received");
-            return message;
+            long deadline = System.nanoTime() + TIMEOUT.toNanos();
+            do {
+                var message = messages.poll(20, TimeUnit.MILLISECONDS);
+                if (message != null) return message;
+                Throwable error = failure.getNow(null);
+                if (error != null) throw new AssertionError("STOMP connection failed while waiting for message", error);
+            } while (System.nanoTime() < deadline);
+            throw new AssertionError("No message received");
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             throw new AssertionError(error);
@@ -173,28 +249,27 @@ public final class TestStomp implements AutoCloseable {
         return messages.poll();
     }
 
-    public void awaitClosed() {
-        await(() -> !session.isConnected());
-    }
-
-    public static void await(java.util.function.BooleanSupplier condition) {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        while (!condition.getAsBoolean()) {
-            if (System.nanoTime() >= deadline) throw new AssertionError("Condition did not become true");
-            try {
-                Thread.sleep(20);
-            } catch (InterruptedException error) {
-                Thread.currentThread().interrupt();
-                throw new AssertionError(error);
-            }
-        }
-    }
-
     @Override
     public void close() {
-        if (session != null && session.isConnected()) session.disconnect();
-        client.stop();
-        scheduler.shutdown();
+        if (!closed.compareAndSet(false, true)) return;
+        failed(new IllegalStateException("STOMP client closed"));
+        RuntimeException failure = null;
+        for (Runnable cleanup : List.<Runnable>of(
+                () -> {
+                    if (session != null && session.isConnected()) session.disconnect();
+                },
+                client::stop,
+                connector::shutdown,
+                container::destroy,
+                scheduler::shutdown)) {
+            try {
+                cleanup.run();
+            } catch (RuntimeException error) {
+                if (failure == null) failure = error;
+                else failure.addSuppressed(error);
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     /** Decodes every frame as UTF-8 text regardless of the server's declared content-type (e.g. application/json),

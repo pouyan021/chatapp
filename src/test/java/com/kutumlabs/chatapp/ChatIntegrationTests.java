@@ -1,6 +1,7 @@
 package com.kutumlabs.chatapp;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.awaitility.Awaitility.await;
 
 import com.github.f4b6a3.ulid.Ulid;
 import com.github.f4b6a3.ulid.UlidCreator;
@@ -19,8 +20,10 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +32,7 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.client.RestTestClient;
+import org.testcontainers.activemq.ArtemisContainer;
 import org.testcontainers.cassandra.CassandraContainer;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -62,6 +66,11 @@ class ChatIntegrationTests {
             .withExposedPorts(9000)
             .waitingFor(Wait.forHttp("/minio/health/ready").forPort(9000));
 
+    @Container
+    static final ArtemisContainer ARTEMIS = new ArtemisContainer("apache/activemq-artemis:2.44.0")
+            .withUser("chatapp")
+            .withPassword("chatapp123");
+
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("chat.security.issuer", ISSUER::issuer);
@@ -71,6 +80,10 @@ class ChatIntegrationTests {
                 "chat.storage.public-endpoint", () -> "http://" + MINIO.getHost() + ":" + MINIO.getMappedPort(9000));
         registry.add("chat.storage.access-key", () -> "chatapp");
         registry.add("chat.storage.secret-key", () -> "chatapp123");
+        registry.add("chat.broker.host", ARTEMIS::getHost);
+        registry.add("chat.broker.port", () -> ARTEMIS.getMappedPort(61613));
+        registry.add("chat.broker.login", () -> "chatapp");
+        registry.add("chat.broker.passcode", () -> "chatapp123");
     }
 
     @LocalServerPort
@@ -219,7 +232,7 @@ class ChatIntegrationTests {
                 .returnResult()
                 .getResponseBody();
         assertThat(summaries).extracting(ChatSummaryView::chatId).contains(chat.chatId());
-        var summary = List.of(summaries).stream()
+        var summary = Stream.of(summaries)
                 .filter(s -> s.chatId().equals(chat.chatId()))
                 .findFirst()
                 .orElseThrow();
@@ -260,8 +273,8 @@ class ChatIntegrationTests {
                 .hasSize(1);
         assertThat(store.history(ChatModels.id(chat.chatId()), 100, null).messages())
                 .hasSize(1);
-        assertThatThrownBy(() -> chats.send(owner, new SendCommand(clientId, chat.chatId(), "different", null)))
-                .isInstanceOf(ChatFailure.class);
+        var conflictingCommand = new SendCommand(clientId, chat.chatId(), "different", null);
+        assertThatThrownBy(() -> chats.send(owner, conflictingCommand)).isInstanceOf(ChatFailure.class);
     }
 
     @Test
@@ -269,18 +282,19 @@ class ChatIntegrationTests {
         var owner = UlidCreator.getMonotonicUlid();
         var chat = create(owner, UlidCreator.getMonotonicUlid());
         var outsider = UlidCreator.getMonotonicUlid();
+        URI uri = socketUri();
+        String ownerToken = token(owner);
         web.get().uri("/api/connections").exchange().expectStatus().isUnauthorized();
         for (String invalid : List.of(
                 ISSUER.token(owner.toString(), "wrong", ISSUER.issuer(), Duration.ofMinutes(1)),
                 ISSUER.token(owner.toString(), "chatapp", "https://wrong.test", Duration.ofMinutes(1)),
                 ISSUER.token("not-a-ulid", "chatapp", ISSUER.issuer(), Duration.ofMinutes(1)),
                 ISSUER.token(owner.toString(), "chatapp", ISSUER.issuer(), Duration.ofMinutes(-5)))) {
-            assertThatThrownBy(() -> new TestStomp(socketUri(), invalid, "browser"))
-                    .isInstanceOf(RuntimeException.class);
+            assertThatThrownBy(() -> new TestStomp(uri, invalid, "browser")).isInstanceOf(IllegalStateException.class);
         }
-        assertThatThrownBy(() -> new TestStomp(socketUri(), null, "browser")).isInstanceOf(RuntimeException.class);
-        assertThatThrownBy(() -> new TestStomp(socketUri(), token(owner), "invalid device"))
-                .isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> new TestStomp(uri, null, "browser")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new TestStomp(uri, ownerToken, "invalid device"))
+                .isInstanceOf(IllegalStateException.class);
         web.get()
                 .uri("/api/chats/" + chat.chatId() + "/messages")
                 .headers(headers -> headers.setBearerAuth(token(outsider)))
@@ -292,11 +306,10 @@ class ChatIntegrationTests {
                     new SendCommand(UlidCreator.getMonotonicUlid().toString(), chat.chatId(), "unauthorized", null));
             assertThat(result.error().code()).isEqualTo("FORBIDDEN");
         }
-        assertThatThrownBy(() -> http.newWebSocketBuilder()
-                        .header("Origin", "https://untrusted.test")
-                        .buildAsync(socketUri(), new java.net.http.WebSocket.Listener() {})
-                        .join())
-                .isInstanceOf(CompletionException.class);
+        var rejectedHandshake = http.newWebSocketBuilder()
+                .header("Origin", "https://untrusted.test")
+                .buildAsync(uri, new java.net.http.WebSocket.Listener() {});
+        assertThatThrownBy(rejectedHandshake::join).isInstanceOf(CompletionException.class);
     }
 
     @Test
@@ -317,11 +330,15 @@ class ChatIntegrationTests {
                     .exchange()
                     .expectStatus()
                     .isNoContent();
-            active.awaitClosed();
+            await("STOMP connection closes").atMost(TestStomp.TIMEOUT).untilAsserted(() -> assertThat(
+                            active.stomp().isConnected())
+                    .isFalse());
         }
         String shortToken = ISSUER.token(owner.toString(), "chatapp", ISSUER.issuer(), Duration.ofSeconds(3));
         try (var expiring = new TestStomp(socketUri(), shortToken, "browser")) {
-            expiring.awaitClosed();
+            await("STOMP connection closes").atMost(TestStomp.TIMEOUT).untilAsserted(() -> assertThat(
+                            expiring.stomp().isConnected())
+                    .isFalse());
         }
         awaitNoConnections(owner);
     }
@@ -330,7 +347,9 @@ class ChatIntegrationTests {
     void closesSilentConnectionsUsingStompHeartbeats() {
         var owner = UlidCreator.getMonotonicUlid();
         try (var silent = new TestStomp(socketUri(), token(owner), "silent", false, null)) {
-            silent.awaitClosed();
+            await("STOMP connection closes").atMost(TestStomp.TIMEOUT).untilAsserted(() -> assertThat(
+                            silent.stomp().isConnected())
+                    .isFalse());
         }
         awaitNoConnections(owner);
     }
@@ -338,6 +357,7 @@ class ChatIntegrationTests {
     @Test
     void rejectsUnauthorizedDestinationsAndCredentialChanges() {
         var owner = UlidCreator.getMonotonicUlid();
+        var unauthorizedDeliveries = new ConcurrentLinkedQueue<Object>();
         for (String destination : List.of("/queue/messages", "/user/other/queue/messages", "/topic/all")) {
             try (var client = connect(owner, "phone")) {
                 client.stomp().subscribe(destination, new org.springframework.messaging.simp.stomp.StompFrameHandler() {
@@ -347,23 +367,32 @@ class ChatIntegrationTests {
                     }
 
                     public void handleFrame(org.springframework.messaging.simp.stomp.StompHeaders h, Object p) {
-                        throw new AssertionError("Unauthorized delivery");
+                        unauthorizedDeliveries.add(p);
                     }
                 });
-                client.awaitClosed();
+                await("STOMP connection closes").atMost(TestStomp.TIMEOUT).untilAsserted(() -> assertThat(
+                                client.stomp().isConnected())
+                        .isFalse());
             }
         }
+        assertThat(unauthorizedDeliveries)
+                .as("deliveries to unauthorized subscriptions")
+                .isEmpty();
         try (var client = connect(owner, "phone")) {
             var headers = new org.springframework.messaging.simp.stomp.StompHeaders();
             headers.setDestination("/app/v1/connection.info");
             headers.add("request-id", "change");
             headers.add("Authorization", "Bearer " + token(UlidCreator.getMonotonicUlid()));
             client.stomp().send(headers, "");
-            client.awaitClosed();
+            await("STOMP connection closes").atMost(TestStomp.TIMEOUT).untilAsserted(() -> assertThat(
+                            client.stomp().isConnected())
+                    .isFalse());
         }
         try (var client = connect(owner, "phone")) {
             client.stomp().send("/queue/messages", "forged");
-            client.awaitClosed();
+            await("STOMP connection closes").atMost(TestStomp.TIMEOUT).untilAsserted(() -> assertThat(
+                            client.stomp().isConnected())
+                    .isFalse());
         }
         awaitNoConnections(owner);
     }
@@ -389,13 +418,17 @@ class ChatIntegrationTests {
         try (var sender = connect(alice, "sender");
                 var receiver = connect(bob, "receiver")) {
             receiver.unsubscribeMessages();
-            receiver.request("/app/v1/connection.info", "", ConnectionRegistry.SessionView.class);
+            assertThat(receiver.request("/app/v1/connection.info", "", ConnectionRegistry.SessionView.class)
+                            .sessionId())
+                    .isEqualTo(receiver.session().sessionId());
             assertThat(sender.send(new SendCommand(
                                     UlidCreator.getMonotonicUlid().toString(), chat.chatId(), "missed", null))
                             .acceptance())
                     .isNotNull();
             receiver.subscribeMessages();
-            receiver.request("/app/v1/connection.info", "", ConnectionRegistry.SessionView.class);
+            assertThat(receiver.request("/app/v1/connection.info", "", ConnectionRegistry.SessionView.class)
+                            .sessionId())
+                    .isEqualTo(receiver.session().sessionId());
             var accepted = sender.send(
                             new SendCommand(UlidCreator.getMonotonicUlid().toString(), chat.chatId(), "live", null))
                     .acceptance();
@@ -408,21 +441,47 @@ class ChatIntegrationTests {
     void oversizedMessagesAndDuplicateSubscriptionsCloseTheConnection() {
         var owner = UlidCreator.getMonotonicUlid();
         try (var client = connect(owner, "phone")) {
-            client.subscribeMessages();
-            client.awaitClosed();
+            client.subscribeMessagesWithoutWaiting();
+            await("STOMP connection closes").atMost(TestStomp.TIMEOUT).untilAsserted(() -> assertThat(
+                            client.stomp().isConnected())
+                    .isFalse());
         }
         try (var client = connect(owner, "phone")) {
             var headers = new org.springframework.messaging.simp.stomp.StompHeaders();
             headers.setDestination("/app/v1/message.send");
             headers.add("request-id", "large");
             client.stomp().send(headers, "x".repeat(70000));
-            client.awaitClosed();
+            await("STOMP connection closes").atMost(TestStomp.TIMEOUT).untilAsserted(() -> assertThat(
+                            client.stomp().isConnected())
+                    .isFalse());
+        }
+        awaitNoConnections(owner);
+    }
+
+    @Test
+    void rejectedSubscriptionFailsPendingAndSubsequentWaitsWithoutTimingOut() {
+        var owner = UlidCreator.getMonotonicUlid();
+        try (var client = connect(owner, "phone")) {
+            assertThatThrownBy(client::subscribeMessages)
+                    .isInstanceOf(IllegalStateException.class)
+                    .rootCause()
+                    .isNotInstanceOf(TimeoutException.class);
+            await("STOMP connection closes").atMost(TestStomp.TIMEOUT).untilAsserted(() -> assertThat(
+                            client.stomp().isConnected())
+                    .isFalse());
+            assertThatThrownBy(
+                            () -> client.request("/app/v1/connection.info", "", ConnectionRegistry.SessionView.class))
+                    .isInstanceOf(IllegalStateException.class)
+                    .rootCause()
+                    .isNotInstanceOf(TimeoutException.class);
         }
         awaitNoConnections(owner);
     }
 
     private void awaitNoConnections(Ulid user) {
-        TestStomp.await(() -> connections.list(user).isEmpty());
+        await("user connections are removed")
+                .atMost(TestStomp.TIMEOUT)
+                .untilAsserted(() -> assertThat(connections.list(user)).isEmpty());
     }
 
     @Test
@@ -471,14 +530,14 @@ class ChatIntegrationTests {
                 .exchange()
                 .expectStatus()
                 .isForbidden();
-        Thread.sleep(2200);
-        assertThat(http.send(
-                                HttpRequest.newBuilder(URI.create(url.url()))
-                                        .GET()
-                                        .build(),
-                                HttpResponse.BodyHandlers.discarding())
-                        .statusCode())
-                .isEqualTo(403);
+        var expiredDownload = HttpRequest.newBuilder(URI.create(url.url()))
+                .timeout(TestStomp.TIMEOUT)
+                .GET()
+                .build();
+        await("download URL expires").atMost(TestStomp.TIMEOUT).untilAsserted(() -> assertThat(
+                        http.send(expiredDownload, HttpResponse.BodyHandlers.discarding())
+                                .statusCode())
+                .isEqualTo(403));
         assertThat(download(token(recipient), chat.chatId(), locator).expiresAt())
                 .isAfter(url.expiresAt());
         var recipientCommand = new SendCommand(

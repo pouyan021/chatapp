@@ -74,6 +74,22 @@ services:
       timeout: 5s
       retries: 10
 
+  artemis:
+    image: apache/activemq-artemis:2.44.0
+    ports:
+      - "61613:61613"
+      - "8161:8161"
+    environment:
+      - ARTEMIS_USER=chatapp
+      - ARTEMIS_PASSWORD=chatapp123
+    healthcheck:
+      # No CLI ping subcommand ships in this image, so probe the broker's main
+      # acceptor (61616, all protocols including STOMP) with a bash TCP connect.
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/61616'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
   minio-init:
     image: minio/mc:latest
     depends_on:

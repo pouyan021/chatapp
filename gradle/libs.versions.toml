@@ -29,6 +29,7 @@ spring-boot-validation = { module = "org.springframework.boot:spring-boot-starte
 spring-boot-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc" }
 spring-boot-websocket = { module = "org.springframework.boot:spring-boot-starter-websocket" }
 spring-security-messaging = { module = "org.springframework.security:spring-security-messaging" }
+reactor-netty = { module = "io.projectreactor.netty:reactor-netty" }
 spring-boot-test-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator-test" }
 spring-boot-test-cassandra = { module = "org.springframework.boot:spring-boot-starter-data-cassandra-test" }
 spring-boot-test-opentelemetry = { module = "org.springframework.boot:spring-boot-starter-opentelemetry-test" }
@@ -37,6 +38,7 @@ spring-security-test = { module = "org.springframework.security:spring-security-
 spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
 testcontainers-cassandra = { module = "org.testcontainers:testcontainers-cassandra" }
 testcontainers-grafana = { module = "org.testcontainers:testcontainers-grafana" }
+testcontainers-activemq = { module = "org.testcontainers:testcontainers-activemq" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 

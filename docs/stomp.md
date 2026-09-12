@@ -113,11 +113,11 @@ There is no durable replay cursor on the live queue — a disconnect (transport 
 
 `chat.socket.max-frame-bytes` (65,536 by default) bounds both inbound and outbound WebSocket frames; a client that exceeds it is disconnected. `chat.socket.send-buffer-bytes` and `chat.socket.send-time-limit` bound how much unacknowledged outbound data the server queues per connection before dropping a slow client.
 
-Fan-out and connection tracking are local to one server instance (`ConnectionRegistry`, `LocalMessageDispatcher`). Multiple instances require a separate shared delivery mechanism.
+Connection tracking (`ConnectionRegistry`) is local to one server instance — `/v1/connection.info` only reports sessions held by the node a client happens to be connected to. Message fan-out is not: `BrokerMessageDispatcher` addresses each participant by user ID rather than by local session, so delivery is routed through the STOMP broker relay (ActiveMQ Artemis) and reaches that user's sessions regardless of which node holds them.
 
 ## Server integration and verification
 
-`StompConfiguration` wires the `/ws/chat` STOMP endpoint onto the existing Spring MVC (servlet) server, running client message handling on a virtual-thread executor (`SimpleAsyncTaskExecutor` with `setVirtualThreads(true)`) rather than the reactive stack. `StompAuthenticationInterceptor` performs the credential and destination checks described above on the client inbound channel and closes the connection on any violation; `ConnectionRegistry` tracks live sessions and expires them on a schedule.
+`StompConfiguration` wires the `/ws/chat` STOMP endpoint onto the existing Spring MVC (servlet) server, running client message handling on a virtual-thread executor (`SimpleAsyncTaskExecutor` with `setVirtualThreads(true)`) rather than the reactive stack. `StompAuthenticationInterceptor` performs the credential and destination checks described above on the client inbound channel and closes the connection on any violation; `ConnectionRegistry` tracks live sessions and expires them on a schedule. Message broker duties (routing `/queue/**` and resolving `/user/**` destinations across nodes) are relayed to ActiveMQ Artemis via `enableStompBrokerRelay` rather than handled in-process — see `chat.broker.*` for connection settings.
 
 `ChatIntegrationTests` and `support/TestStomp` show a Java STOMP client and exercise actual WebSocket traffic against Cassandra and MinIO. Run `./gradlew test` and `./gradlew spotlessCheck`.
 

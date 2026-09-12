@@ -63,7 +63,7 @@ class DevWebTests extends DevWebHarness {
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
             JsonNode body = JSON.readTree(response.body());
-            String token = body.get("token").asText();
+            String token = body.get("token").asString();
             var claims = SignedJWT.parse(token).getJWTClaimsSet();
             assertThat(claims.getStringClaim("user_id")).isEqualTo(DevController.USERS.get(identity));
             assertThat(Duration.between(
@@ -95,7 +95,7 @@ class DevWebTests extends DevWebHarness {
         var response = request("/v3/api-docs", null, null);
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode spec = JSON.readTree(response.body());
-        assertThat(spec.at("/components/securitySchemes/bearerAuth/scheme").asText())
+        assertThat(spec.at("/components/securitySchemes/bearerAuth/scheme").asString())
                 .isEqualTo("bearer");
         assertThat(spec.at("/security/0").has("bearerAuth")).isTrue();
         assertThat(spec.get("paths").size()).isEqualTo(8);
@@ -123,10 +123,10 @@ class DevWebTests extends DevWebHarness {
         assertThat(spec.at("/paths/~1api~1chats/get/parameters").isMissingNode())
                 .isTrue();
         assertThat(spec.at("/components/schemas/CreateChat/properties/members/example/0")
-                        .asText())
+                        .asString())
                 .isEqualTo(DevController.USERS.get("bob"));
         assertThat(spec.at("/paths/~1api~1chats~1{chatId}~1messages/get/description")
-                        .asText())
+                        .asString())
                 .contains("nextCursor", "limit");
         assertThat(spec.at("/paths/~1api~1chats/post/responses/401/content").isMissingNode())
                 .isTrue();
@@ -164,8 +164,8 @@ class DevWebTests extends DevWebHarness {
                                 .isNotEmpty();
                         response.get("content").properties().forEach(media -> {
                             JsonNode schema = media.getValue().get("schema");
-                            String ref = schema.path("$ref").asText();
-                            if (ref.isEmpty()) ref = schema.at("/items/$ref").asText();
+                            String ref = schema.path("$ref").asString();
+                            if (ref.isEmpty()) ref = schema.at("/items/$ref").asString();
                             assertThat(ref).as(endpoint).startsWith("#/components/schemas/");
                             assertThat(spec.at(ref.substring(1)).isMissingNode())
                                     .as(endpoint)
@@ -173,21 +173,21 @@ class DevWebTests extends DevWebHarness {
                         });
                     }
                 } else {
-                    assertThat(response.get("$ref").asText()).isEqualTo("#/components/responses/Error" + code);
+                    assertThat(response.get("$ref").asString()).isEqualTo("#/components/responses/Error" + code);
                     JsonNode shared = spec.at("/components/responses/Error" + code);
-                    assertThat(shared.get("description").asText()).isNotBlank();
+                    assertThat(shared.get("description").asString()).isNotBlank();
                     if (code.equals("401")) assertThat(shared.has("content")).isFalse();
                     else
                         assertThat(shared.at("/content/application~1json/schema/$ref")
-                                        .asText())
+                                        .asString())
                                 .isEqualTo("#/components/schemas/ErrorBody");
                 }
             }
             operation.path("parameters").forEach(parameter -> {
-                assertThat(parameter.get("name").asText()).isNotIn("jwt", "authorization", "Authorization");
-                if (parameter.get("name").asText().equals("chatId")) {
-                    assertThat(parameter.get("description").asText()).isEqualTo("Chat ULID returned by create/list");
-                    assertThat(parameter.get("example").asText()).isEqualTo("01ARZ3NDEKTSV4RRFFQ69G5FAW");
+                assertThat(parameter.get("name").asString()).isNotIn("jwt", "authorization", "Authorization");
+                if (parameter.get("name").asString().equals("chatId")) {
+                    assertThat(parameter.get("description").asString()).isEqualTo("Chat ULID returned by create/list");
+                    assertThat(parameter.get("example").asString()).isEqualTo("01ARZ3NDEKTSV4RRFFQ69G5FAW");
                 }
             });
         });

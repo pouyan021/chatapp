@@ -44,6 +44,7 @@ dependencies {
     implementation(libs.springdoc.webmvc.ui)
     implementation(libs.spring.boot.websocket)
     implementation(libs.spring.security.messaging)
+    implementation(libs.reactor.netty)
     testImplementation(libs.spring.boot.test.actuator)
     testImplementation(libs.spring.boot.test.cassandra)
     testImplementation(libs.spring.boot.test.opentelemetry)
@@ -52,6 +53,7 @@ dependencies {
     testImplementation(libs.spring.boot.testcontainers)
     testImplementation(libs.testcontainers.cassandra)
     testImplementation(libs.testcontainers.grafana)
+    testImplementation(libs.testcontainers.activemq)
     testImplementation(libs.testcontainers.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
