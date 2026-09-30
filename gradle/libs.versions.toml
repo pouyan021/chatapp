@@ -2,12 +2,12 @@
 java = "25"
 spring-boot = "4.1.1"
 spring-dependency-management = "1.1.7"
-spotless = "8.10.2"
+spotless = "8.10.3"
 ulid-creator = "5.2.4"
-aws-sdk = "2.31.0"
+aws-sdk = "2.55.6"
 springdoc = "3.1.1"
 # Align the appender incubator API with Spring Boot 4.1.1 / OpenTelemetry 1.62.0.
-otel-instrumentation = "2.28.1-alpha"
+otel-instrumentation = "2.31.1-alpha"
 
 [libraries]
 spring-boot-aspectj = { module = "org.springframework.boot:spring-boot-starter-aspectj" }
