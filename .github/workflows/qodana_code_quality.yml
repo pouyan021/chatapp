@@ -35,7 +35,7 @@ jobs:
           persist-credentials: false
       - name: 'Qodana Scan'
         if: ${{ env.QODANA_TOKEN != '' }}
-        uses: JetBrains/qodana-action@v2026.2
+        uses: JetBrains/qodana-action@v2026.3
         with:
           # When pr-mode is set to true, Qodana analyzes only the files that have been changed
           pr-mode: false
